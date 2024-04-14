@@ -1,0 +1,41 @@
+name: Deploy Frontend
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+      - name: List files in the frontend directory
+        run: pwd
+      - name: List files in the frontend directory 2
+        run: ls -la ./frontend
+      - run: docker build -t jangdm37/react-test-app -f ./frontend/Dockerfile.dev ./frontend
+      - run: docker run -e CI=true jangdm37/react-test-app npm test
+
+      - run: docker build -t jangdm37/docker-frontend ./frontend
+      - run: docker build -t jangdm37/docker-nginx ./nginx
+      - run: docker build -t jangdm37/docker-backend ./backend
+
+      - run: docker push -t jangdm37/docker-frontend
+      - run: docker push -t jangdm37/docker-nginx
+      - run: docker push -t jangdm37/docker-backend
+
+      - name: Generate deployment package
+        run: zip -r deploy.zip . -x '*.git*'
+
+      - name: Deploy to EB
+        uses: einaregilsson/beanstalk-deploy@v18
+        with:
+          aws_access_key: ${{ secrets.AWS_ACCESS_KEY }}
+          aws_secret_key: ${{ secrets.AWS_SECRET_KEY }}
+          application_name: asdf
+          environment_name: Asdf-env
+          existing_bucket_name: elasticbeanstalk-ap-northeast-2-730335259243
+          region: ap-northeast-2
+          version_label: ${{ github.sha }}
+          deployment_package: deploy.zip
